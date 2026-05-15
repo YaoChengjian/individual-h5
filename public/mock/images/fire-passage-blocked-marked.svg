@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#eef5ff"/>
+  <path d="M0 0h960v250H0z" fill="#dfeaf8"/>
+  <path d="M0 250h960v290H0z" fill="#f4f7fb"/>
+  <path d="M112 50h210v240H112z" fill="#fff" stroke="#c8d7ea" stroke-width="4"/>
+  <path d="M140 82h154v172H140z" fill="#e4edf9" stroke="#b6c9e0" stroke-width="3"/>
+  <path d="M130 330h700" stroke="#b6c9dc" stroke-width="6" stroke-dasharray="18 18"/>
+  <path d="M642 286h176v126H642zM674 250h134v78H674zM474 310h136v104H474zM506 256h118v82H506zM304 318h128v96H304zM334 270h120v80H334zM238 374h80v44H238z" fill="#c77842" stroke="#7d4323" stroke-width="4"/>
+  <rect x="220" y="230" width="620" height="210" rx="12" fill="none" stroke="#f04438" stroke-width="8" stroke-dasharray="18 12"/>
+  <path d="M820 230h80v70h-80z" fill="#f04438"/>
+  <text x="834" y="276" fill="#fff" font-family="Arial,'Microsoft YaHei',sans-serif" font-size="24" font-weight="700">96%</text>
+  <path d="M64 72h216a20 20 0 0 1 20 20v56a20 20 0 0 1-20 20H64a20 20 0 0 1-20-20V92a20 20 0 0 1 20-20z" fill="#f04438"/>
+  <text x="70" y="112" fill="#fff" font-family="Arial,'Microsoft YaHei',sans-serif" font-size="24" font-weight="700">AI识别：消防通道堵塞</text>
+  <text x="70" y="146" fill="#fff" font-family="Arial,'Microsoft YaHei',sans-serif" font-size="18">高风险 | 建议立即取证上报</text>
+</svg>

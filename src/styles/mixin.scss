@@ -1,0 +1,9 @@
+/* SCSS 自定义样式函数（Mixin） */
+/* 解决浮动元素造成的父元素高度塌陷 */
+@mixin clearfix {
+	&::after {
+		content: '';
+		display: table;
+		clear: both;
+	}
+}

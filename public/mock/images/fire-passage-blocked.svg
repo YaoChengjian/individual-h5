@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#eef5ff"/>
+  <path d="M0 0h960v250H0z" fill="#dfeaf8"/>
+  <path d="M0 250h960v290H0z" fill="#f4f7fb"/>
+  <path d="M112 50h210v240H112z" fill="#fff" stroke="#c8d7ea" stroke-width="4"/>
+  <path d="M140 82h154v172H140z" fill="#e4edf9" stroke="#b6c9e0" stroke-width="3"/>
+  <path d="M130 330h700" stroke="#b6c9dc" stroke-width="6" stroke-dasharray="18 18"/>
+  <path d="M642 286h176v126H642zM674 250h134v78H674zM474 310h136v104H474zM506 256h118v82H506zM304 318h128v96H304zM334 270h120v80H334zM238 374h80v44H238z" fill="#c77842" stroke="#7d4323" stroke-width="4"/>
+  <circle cx="80" cy="96" r="30" fill="#f04438"/>
+  <path d="M80 72v48M80 134v4" stroke="#fff" stroke-linecap="round" stroke-width="12"/>
+  <text x="120" y="106" fill="#1f2a44" font-family="Arial,'Microsoft YaHei',sans-serif" font-size="34" font-weight="700">消防通道堵塞模拟现场</text>
+  <text x="120" y="150" fill="#526071" font-family="Arial,'Microsoft YaHei',sans-serif" font-size="22">楼梯转角平台堆放纸箱与旧家具，影响疏散逃生</text>
+</svg>
