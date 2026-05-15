@@ -58,6 +58,7 @@ export type PatrolWorkOrder = {
 	documentContent?: string;
 	noticeNumber?: string;
 	fileUrl?: string;
+	evidenceList?: Array<Record<string, any>>;
 	selected?: boolean;
 };
 
@@ -148,16 +149,21 @@ export function getTaskWorkOrders(taskId: number) {
 	return unwrap<PatrolWorkOrder[]>(request.post('/h5/task/work-orders', { taskId }));
 }
 
-export function bindTaskWorkOrders(taskId: number, workOrderIds: number[]) {
-	return unwrap<PatrolWorkOrder[]>(request.post('/h5/task/work-orders/bind', { taskId, workOrderIds }));
+export function bindTaskWorkOrders(
+	taskId: number,
+	workOrderIds: number[],
+	options: {
+		printed?: boolean;
+		noticeNumber?: string;
+		documentContent?: string;
+		fileUrl?: string;
+	} = {}
+) {
+	return unwrap<PatrolWorkOrder[]>(request.post('/h5/task/work-orders/bind', { taskId, workOrderIds, ...options }));
 }
 
-export function savePrintedWorkOrders(data: {
-	taskId: number;
-	noticeNumber?: string;
-	documentContent?: string;
-	fileUrl?: string;
-	workOrders: PatrolWorkOrder[];
-}) {
-	return unwrap<{ count: number; list: PatrolWorkOrder[] }>(request.post('/h5/task/work-orders/printed', data));
+export function uploadH5PrintFile(file: Blob, fileName: string) {
+	const formData = new FormData();
+	formData.append('file', file, fileName);
+	return unwrap<Record<string, any>>(request.post('/h5/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }));
 }

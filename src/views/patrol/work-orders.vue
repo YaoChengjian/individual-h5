@@ -65,9 +65,7 @@
 		</van-popup>
 
 		<div v-if="selectedOrders.length" class="fixed bottom-0 left-0 right-0 z-20 border-t border-#e7edf7 bg-white px-12 py-10">
-			<van-button block round type="primary" size="large" @click="openPreview">
-				打印查看
-			</van-button>
+			<van-button block round type="primary" size="large" @click="openPreview"> 打印查看 </van-button>
 		</div>
 	</div>
 </template>
@@ -78,7 +76,7 @@ import jsPDF from 'jspdf';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { getTaskDetail, getTaskWorkOrders, savePrintedWorkOrders, type PatrolTask, type PatrolWorkOrder } from '/@/api/patrol';
+import { bindTaskWorkOrders, getTaskDetail, getTaskWorkOrders, uploadH5PrintFile, type PatrolTask, type PatrolWorkOrder } from '/@/api/patrol';
 
 type AddressItem = {
 	id: number;
@@ -115,7 +113,7 @@ const selectedOrders = computed(() => {
 	return workOrders.value.filter((item) => selectedSet.has(item.workOrderId) && !isProcessedWorkOrder(item));
 });
 
-const isProcessedWorkOrder = (item: PatrolWorkOrder) => item.status === 'processed' || item.printStatus === 'PRINTED' || !!item.printed;
+const isProcessedWorkOrder = (item: PatrolWorkOrder) => ['processed', 'finished'].includes(item.status) || item.printStatus === 'PRINTED' || !!item.printed;
 
 const pendingWorkOrders = computed(() => workOrders.value.filter((item) => !isProcessedWorkOrder(item)));
 
@@ -126,18 +124,19 @@ const toAddressItem = (item: PatrolWorkOrder, processed = false): AddressItem =>
 	name: item.locationName || item.addressDetail || item.eventTypeName || '智能巡查工单',
 	tel: '',
 	address: [item.addressDetail, item.description].filter(Boolean).join(' ｜ '),
-	statusName: processed ? '已处理' : item.statusName || '待处理',
+	statusName: processed ? '已完成' : item.statusName || '待处理',
 	statusType: processed ? 'success' : 'warning',
 	reportTime: item.reportTime || '',
 });
 
 const selectedWorkOrderTexts = computed(() => {
 	if (!selectedOrders.value.length) return ['请选择需要打印的事件工单。'];
-	return selectedOrders.value
-		.map((item, index) => {
-			const location = [item.locationName, item.addressDetail].filter(Boolean).join('，');
-			return `${index + 1}. 事件类型：${item.eventTypeName || '智能巡查事件'}；上报人：${item.reporterName || '-'}；位置：${location || '-'}；上报时间：${item.reportTime || '-'}；问题描述：${item.description || '-'}；整改建议：${item.suggestion || '请尽快核实并完成整改'}。`;
-		});
+	return selectedOrders.value.map((item, index) => {
+		const location = [item.locationName, item.addressDetail].filter(Boolean).join('，');
+		return `${index + 1}. 事件类型：${item.eventTypeName || '智能巡查事件'}；上报人：${item.reporterName || '-'}；位置：${
+			location || '-'
+		}；上报时间：${item.reportTime || '-'}；问题描述：${item.description || '-'}；整改建议：${item.suggestion || '请尽快核实并完成整改'}。`;
+	});
 });
 
 const documentContent = computed(() => {
@@ -160,7 +159,7 @@ const addressList = computed<AddressItem[]>(() => pendingWorkOrders.value.map((i
 
 const disabledAddressList = computed<AddressItem[]>(() => processedWorkOrders.value.map((item) => toAddressItem(item, true)));
 
-const mergeWorkOrders = (rows: PatrolWorkOrder[], options: { resetSelection?: boolean } = {}) => {
+const mergeWorkOrders = (rows: PatrolWorkOrder[]) => {
 	const rowMap = new Map(rows.map((item) => [item.workOrderCode || String(item.workOrderId), item]));
 	const nextList = workOrders.value.map((item) => {
 		const key = item.workOrderCode || String(item.workOrderId);
@@ -173,15 +172,7 @@ const mergeWorkOrders = (rows: PatrolWorkOrder[], options: { resetSelection?: bo
 	const newRows = Array.from(rowMap.values());
 	workOrders.value = [...nextList, ...newRows];
 	const availableIds = new Set(workOrders.value.filter((item) => !isProcessedWorkOrder(item)).map((item) => item.workOrderId));
-	if (options.resetSelection) {
-		selectedIds.value = Array.from(availableIds);
-	} else {
-		const selectedSet = new Set(selectedIds.value.filter((id) => availableIds.has(id)));
-		newRows.forEach((item) => {
-			if (!isProcessedWorkOrder(item)) selectedSet.add(item.workOrderId);
-		});
-		selectedIds.value = Array.from(selectedSet);
-	}
+	selectedIds.value = selectedIds.value.filter((id) => availableIds.has(id));
 };
 
 const pollWorkOrders = async () => {
@@ -210,7 +201,7 @@ const loadData = async () => {
 	try {
 		task.value = await getTaskDetail(taskId);
 		const rows = await getTaskWorkOrders(taskId);
-		mergeWorkOrders(rows, { resetSelection: true });
+		mergeWorkOrders(rows);
 		startPolling();
 	} finally {
 		loading.value = false;
@@ -227,6 +218,13 @@ const getUploadFilePath = (data: any): string => {
 	return getUploadFilePath(data.data || data.file || data.result);
 };
 
+const normalizeFileUrl = (filePath: string, host = uploadHost) => {
+	const rawPath = filePath.trim();
+	if (/^https?:\/\//i.test(rawPath)) return rawPath;
+	const normalizedPath = rawPath.replace(/^\/+/, '').replace(/^static\/?/, '');
+	return `${host.replace(/\/?$/, '/')}static/${normalizedPath}`;
+};
+
 const parseUploadResult = (responseText: string) => {
 	if (!responseText) return {};
 	try {
@@ -237,11 +235,7 @@ const parseUploadResult = (responseText: string) => {
 };
 
 const formatFileUrl = (filePath: string) => {
-	const rawPath = filePath.trim();
-	const urlPath = /^https?:\/\//i.test(rawPath) ? new URL(rawPath).pathname : rawPath;
-	const normalizedPath = urlPath.replace(/^\/+/, '').replace(/^static\/?/, '');
-	const fixedPath = `static/${normalizedPath}`;
-	return `${uploadHost}${fixedPath}`;
+	return normalizeFileUrl(filePath);
 };
 
 const createCurrentNoticePdf = async () => {
@@ -275,10 +269,9 @@ const createCurrentNoticePdf = async () => {
 	return pdf.output('blob');
 };
 
-const uploadPdf = async () => {
+const uploadPdfToGasHost = async (pdfBlob: Blob, fileName: string) => {
 	const formData = new FormData();
-	const pdfBlob = await createCurrentNoticePdf();
-	formData.append('file', pdfBlob, `${state.noticeNumber}.pdf`);
+	formData.append('file', pdfBlob, fileName);
 
 	const uploadResponse = await fetch(uploadUrl, {
 		method: 'POST',
@@ -294,20 +287,26 @@ const uploadPdf = async () => {
 	return formatFileUrl(filePath);
 };
 
+const uploadPdfToLocalHost = async (pdfBlob: Blob, fileName: string) => {
+	const uploadResult = await uploadH5PrintFile(pdfBlob, fileName);
+	const filePath = getUploadFilePath(uploadResult);
+	if (!filePath) throw new Error('上传接口未返回文件路径');
+	return normalizeFileUrl(filePath, window.location.origin);
+};
+
+const uploadPdf = async () => {
+	const pdfBlob = await createCurrentNoticePdf();
+	const fileName = `${state.noticeNumber}.pdf`;
+	try {
+		return await uploadPdfToGasHost(pdfBlob, fileName);
+	} catch {
+		return uploadPdfToLocalHost(pdfBlob, fileName);
+	}
+};
+
 const openPrinterProtocol = (fileUrl: string) => {
-	let hasLeftPage = false;
 	const protocolUrl = `openlabel://com.jancsinn.label/pdf?file=${encodeURIComponent(fileUrl)}`;
-	const onVisibilityChange = () => {
-		if (document.hidden) hasLeftPage = true;
-	};
-
-	document.addEventListener('visibilitychange', onVisibilityChange, { once: true });
 	window.location.href = protocolUrl;
-
-	window.setTimeout(() => {
-		document.removeEventListener('visibilitychange', onVisibilityChange);
-		if (!hasLeftPage) window.location.href = fileUrl;
-	}, 1500);
 };
 
 const openPreview = () => {
@@ -326,21 +325,24 @@ const confirmPrint = async () => {
 	try {
 		const fileUrl = await uploadPdf();
 		if (task.value?.taskId) {
-			const result = await savePrintedWorkOrders({
-				taskId: task.value.taskId,
-				noticeNumber: state.noticeNumber,
-				documentContent: documentContent.value,
-				fileUrl,
-				workOrders: ordersToPrint,
-			});
-			if (result?.list?.length) mergeWorkOrders(result.list);
+			const result = await bindTaskWorkOrders(
+				task.value.taskId,
+				ordersToPrint.map((item) => item.workOrderId),
+				{
+					printed: true,
+					noticeNumber: state.noticeNumber,
+					documentContent: documentContent.value,
+					fileUrl,
+				}
+			);
+			if (result?.length) mergeWorkOrders(result);
 		}
 		workOrders.value = workOrders.value.map((item) =>
 			printedIdSet.has(item.workOrderId)
 				? {
 						...item,
-						status: 'processed',
-						statusName: '已处理',
+						status: 'finished',
+						statusName: '已完成',
 						statusColor: '#18a058',
 						statusRipple: false,
 						printStatus: 'PRINTED',
