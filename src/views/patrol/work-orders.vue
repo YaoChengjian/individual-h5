@@ -8,14 +8,16 @@
 					class="work-order-address-list"
 					:list="addressList"
 					:disabled-list="disabledAddressList"
-					:right-icon="''"
+					right-icon="edit"
 					:switchable="true"
 					:show-add-button="false"
+					@edit="handleAddressEdit"
+					@edit-disabled="handleAddressEdit"
 				>
 					<template #item-bottom="item">
-						<div class="mt-8 flex items-center justify-between gap-10 pl-30 text-12 text-#7b8798">
+						<div class="mt-8 flex items-center justify-between gap-10 pl-30 pr-34 text-12 text-#7b8798">
 							<van-tag round :type="item.statusType">{{ item.statusName }}</van-tag>
-							<span class="min-w-0 flex-1 text-right">{{ item.reportTime }}</span>
+							<span class="min-w-0 text-right">{{ item.reportTime }}</span>
 						</div>
 					</template>
 				</van-address-list>
@@ -64,6 +66,47 @@
 			</div>
 		</van-popup>
 
+		<van-popup v-model:show="editVisible" round position="bottom" class="bg-#f7faff">
+			<div class="px-14 pb-14 pt-12">
+				<div class="mb-12 flex items-center justify-between">
+					<div class="text-16 font-900 text-#172033">编辑工单</div>
+					<van-tag round type="warning">待处理</van-tag>
+				</div>
+				<van-form @submit="saveWorkOrderEdit">
+					<van-cell-group inset class="!mx-0 overflow-hidden rounded-16">
+						<van-field
+							v-model="editForm.title"
+							name="title"
+							label="标题"
+							type="textarea"
+							placeholder="请输入工单标题"
+							rows="2"
+							autosize
+							maxlength="50"
+							show-word-limit
+							:rules="[{ required: true, message: '请输入工单标题' }]"
+						/>
+						<van-field
+							v-model="editForm.description"
+							name="description"
+							label="描述"
+							type="textarea"
+							placeholder="请输入工单描述"
+							rows="4"
+							autosize
+							maxlength="300"
+							show-word-limit
+							:rules="[{ required: true, message: '请输入工单描述' }]"
+						/>
+					</van-cell-group>
+					<div class="mt-12 grid grid-cols-2 gap-10">
+						<van-button round plain block size="large" native-type="button" @click="editVisible = false">取消</van-button>
+						<van-button round block type="primary" size="large" native-type="submit" :loading="editSaving">保存</van-button>
+					</div>
+				</van-form>
+			</div>
+		</van-popup>
+
 		<div v-if="selectedOrders.length" class="fixed bottom-0 left-0 right-0 z-20 border-t border-#e7edf7 bg-white px-12 py-10">
 			<van-button block round type="primary" size="large" @click="openPreview"> 打印查看 </van-button>
 		</div>
@@ -76,7 +119,15 @@ import jsPDF from 'jspdf';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { bindTaskWorkOrders, getTaskDetail, getTaskWorkOrders, uploadH5PrintFile, type PatrolTask, type PatrolWorkOrder } from '/@/api/patrol';
+import {
+	bindTaskWorkOrders,
+	getTaskDetail,
+	getTaskWorkOrders,
+	updateTaskWorkOrder,
+	uploadH5PrintFile,
+	type PatrolTask,
+	type PatrolWorkOrder,
+} from '/@/api/patrol';
 
 type AddressItem = {
 	id: number;
@@ -86,6 +137,7 @@ type AddressItem = {
 	statusName: string;
 	statusType: 'warning' | 'success';
 	reportTime: string;
+	editable: boolean;
 };
 
 const uploadHost = 'http://gas.coschat.com/';
@@ -100,6 +152,13 @@ const task = ref<PatrolTask>();
 const workOrders = ref<PatrolWorkOrder[]>([]);
 const selectedIds = ref<number[]>([]);
 const previewVisible = ref(false);
+const editVisible = ref(false);
+const editSaving = ref(false);
+const editForm = reactive({
+	workOrderId: 0,
+	title: '',
+	description: '',
+});
 let pollTimer: number | undefined;
 
 const state = reactive({
@@ -121,21 +180,24 @@ const processedWorkOrders = computed(() => workOrders.value.filter(isProcessedWo
 
 const toAddressItem = (item: PatrolWorkOrder, processed = false): AddressItem => ({
 	id: item.workOrderId,
-	name: item.locationName || item.addressDetail || item.eventTypeName || '智能巡查工单',
+	name: item.title || item.locationName || item.addressDetail || item.eventTypeName || '智能巡查工单',
 	tel: '',
 	address: [item.addressDetail, item.description].filter(Boolean).join(' ｜ '),
 	statusName: processed ? '已完成' : item.statusName || '待处理',
 	statusType: processed ? 'success' : 'warning',
 	reportTime: item.reportTime || '',
+	editable: !processed && (item.status === 'pending_report' || item.statusName === '待处理'),
 });
 
 const selectedWorkOrderTexts = computed(() => {
 	if (!selectedOrders.value.length) return ['请选择需要打印的事件工单。'];
 	return selectedOrders.value.map((item, index) => {
 		const location = [item.locationName, item.addressDetail].filter(Boolean).join('，');
-		return `${index + 1}. 事件类型：${item.eventTypeName || '智能巡查事件'}；上报人：${item.reporterName || '-'}；位置：${
-			location || '-'
-		}；上报时间：${item.reportTime || '-'}；问题描述：${item.description || '-'}；整改建议：${item.suggestion || '请尽快核实并完成整改'}。`;
+		return `${index + 1}. 工单标题：${item.title || item.eventTypeName || '智能巡查工单'}；事件类型：${
+			item.eventTypeName || '智能巡查事件'
+		}；上报人：${item.reporterName || '-'}；位置：${location || '-'}；上报时间：${item.reportTime || '-'}；问题描述：${
+			item.description || '-'
+		}；整改建议：${item.suggestion || '请尽快核实并完成整改'}。`;
 	});
 });
 
@@ -158,6 +220,41 @@ const documentContent = computed(() => {
 const addressList = computed<AddressItem[]>(() => pendingWorkOrders.value.map((item) => toAddressItem(item)));
 
 const disabledAddressList = computed<AddressItem[]>(() => processedWorkOrders.value.map((item) => toAddressItem(item, true)));
+
+const openEditWorkOrder = (workOrderId: number) => {
+	const order = workOrders.value.find((item) => item.workOrderId === workOrderId);
+	if (!order || isProcessedWorkOrder(order)) return;
+	editForm.workOrderId = order.workOrderId;
+	editForm.title = order.title || '';
+	editForm.description = order.description || '';
+	editVisible.value = true;
+};
+
+const handleAddressEdit = (item: AddressItem) => {
+	if (!item.editable) return;
+	openEditWorkOrder(item.id);
+};
+
+const saveWorkOrderEdit = async () => {
+	const taskId = task.value?.taskId || Number(route.params.taskId);
+	if (!taskId || !editForm.workOrderId) return;
+	editSaving.value = true;
+	try {
+		const updated = await updateTaskWorkOrder({
+			taskId,
+			workOrderId: editForm.workOrderId,
+			title: editForm.title.trim(),
+			description: editForm.description.trim(),
+		});
+		workOrders.value = workOrders.value.map((item) => (item.workOrderId === updated.workOrderId ? { ...item, ...updated } : item));
+		editVisible.value = false;
+		showToast({ message: '工单已更新', icon: '' });
+	} catch (error: any) {
+		showToast({ message: error?.message || '保存失败', icon: '' });
+	} finally {
+		editSaving.value = false;
+	}
+};
 
 const mergeWorkOrders = (rows: PatrolWorkOrder[]) => {
 	const rowMap = new Map(rows.map((item) => [item.workOrderCode || String(item.workOrderId), item]));
@@ -379,7 +476,7 @@ onUnmounted(() => {
 }
 
 .work-order-address-list :deep(.van-address-item__title) {
-	padding-right: 0;
+	padding-right: 34px;
 }
 
 .work-order-address-list :deep(.van-address-item) {
@@ -387,6 +484,19 @@ onUnmounted(() => {
 }
 
 .work-order-address-list :deep(.van-address-item__edit) {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	right: 0;
+	border-radius: 999px;
+	background: #eaf3ff;
+	color: #1677ff;
+	font-size: 17px;
+}
+
+.work-order-address-list :deep(.van-address-item--disabled .van-address-item__edit) {
 	display: none;
 }
 

@@ -149,6 +149,10 @@ export function getTaskWorkOrders(taskId: number) {
 	return unwrap<PatrolWorkOrder[]>(request.post('/h5/task/work-orders', { taskId }));
 }
 
+export function updateTaskWorkOrder(data: { taskId: number; workOrderId: number; title: string; description: string }) {
+	return unwrap<PatrolWorkOrder>(request.post('/h5/task/work-orders/update', data));
+}
+
 export function bindTaskWorkOrders(
 	taskId: number,
 	workOrderIds: number[],
