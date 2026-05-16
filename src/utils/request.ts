@@ -39,7 +39,7 @@ service.interceptors.response.use(
 	async (response: AxiosResponse) => {
 		const { data } = response;
 		if (data.code && data.code !== 0) {
-			return Promise.reject(service.interceptors.response);
+			return Promise.reject(data);
 		}
 		return data;
 	},

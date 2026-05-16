@@ -1,7 +1,7 @@
 <template>
-	<div class="min-h-100vh bg-gradient-to-b from-#eef5ff to-#f7faff text-#172033">
-		<van-pull-refresh v-model="refreshing" @refresh="loadTasks">
-			<div class="px-12 py-14">
+	<div class="flex h-full min-h-100vh flex-col bg-gradient-to-b from-#eef5ff to-#f7faff text-#172033">
+		<van-pull-refresh v-model="refreshing" class="min-h-0 flex-1" @refresh="loadTasks">
+			<div class="min-h-full px-12 py-14">
 				<van-loading v-if="loading" class="mt-70 flex justify-center" />
 				<van-empty v-else-if="!tasks.length" description="暂无巡查任务" />
 				<div v-else class="space-y-10">
