@@ -8,17 +8,23 @@
 					class="work-order-address-list"
 					:list="addressList"
 					:disabled-list="disabledAddressList"
-					right-icon="edit"
+					:right-icon="''"
 					:switchable="true"
 					:show-add-button="false"
-					@edit="handleAddressEdit"
-					@edit-disabled="handleAddressEdit"
 				>
 					<template #item-bottom="item">
 						<div class="mt-8 flex items-center justify-between gap-10 pl-30 pr-34 text-12 text-#7b8798">
 							<van-tag round :type="item.statusType">{{ item.statusName }}</van-tag>
 							<span class="min-w-0 text-right">{{ item.reportTime }}</span>
 						</div>
+						<button
+							type="button"
+							class="work-order-card-action"
+							:class="{ 'is-view': item.processed }"
+							@click.stop="handleAddressEdit(item)"
+						>
+							<van-icon :name="item.processed ? 'eye-o' : 'edit'" />
+						</button>
 					</template>
 				</van-address-list>
 				<van-empty v-if="!workOrders.length" image-size="72" description="暂无工单" />
@@ -69,8 +75,11 @@
 		<van-popup v-model:show="editVisible" round position="bottom" class="bg-#f7faff">
 			<div class="px-14 pb-14 pt-12">
 				<div class="mb-12 flex items-center justify-between">
-					<div class="text-16 font-900 text-#172033">编辑工单</div>
-					<van-tag round type="warning">待处理</van-tag>
+					<div class="flex items-center gap-6 text-16 font-900 text-#172033">
+						<van-icon :name="editReadonly ? 'eye-o' : 'edit'" class="text-#1677ff" />
+						<span>{{ editReadonly ? '查看工单' : '编辑工单' }}</span>
+					</div>
+					<van-tag round :type="editReadonly ? 'success' : 'warning'">{{ editReadonly ? '已完成' : '待处理' }}</van-tag>
 				</div>
 				<van-form @submit="saveWorkOrderEdit">
 					<van-cell-group inset class="!mx-0 overflow-hidden rounded-16">
@@ -84,6 +93,7 @@
 							autosize
 							maxlength="50"
 							show-word-limit
+							:readonly="editReadonly"
 							:rules="[{ required: true, message: '请输入工单标题' }]"
 						/>
 						<van-field
@@ -96,16 +106,46 @@
 							autosize
 							maxlength="300"
 							show-word-limit
+							:readonly="editReadonly"
 							:rules="[{ required: true, message: '请输入工单描述' }]"
 						/>
 					</van-cell-group>
+					<div class="mt-12 rounded-16 bg-white p-12 shadow-[0_8px_20px_rgba(28,75,145,0.06)]">
+						<div class="mb-8 flex items-center gap-6 text-13 font-800 text-#172033">
+								<van-icon name="photo-o" class="text-#1677ff" />
+							<span>图片</span>
+						</div>
+						<div v-if="editImageList.length" class="grid grid-cols-3 gap-8">
+							<van-image
+								v-for="(image, index) in editImageList"
+								:key="image"
+								class="aspect-square w-full overflow-hidden rounded-12 border border-#d8e6f7 shadow-[0_6px_14px_rgba(28,75,145,0.08)]"
+								width="100%"
+								height="100%"
+								fit="cover"
+								:src="image"
+								@click.stop="previewWorkOrderImage(index)"
+							/>
+						</div>
+						<van-empty v-else image-size="54" description="暂无现场图片" />
+					</div>
 					<div class="mt-12 grid grid-cols-2 gap-10">
 						<van-button round plain block size="large" native-type="button" @click="editVisible = false">取消</van-button>
-						<van-button round block type="primary" size="large" native-type="submit" :loading="editSaving">保存</van-button>
+						<van-button v-if="!editReadonly" round block type="primary" size="large" native-type="submit" :loading="editSaving">保存</van-button>
+						<van-button v-else round block type="primary" size="large" native-type="button" @click="editVisible = false">关闭</van-button>
 					</div>
 				</van-form>
 			</div>
 		</van-popup>
+
+		<van-image-preview
+			v-model:show="imagePreviewVisible"
+			:images="editImageList"
+			:start-position="imagePreviewIndex"
+			closeable
+			teleport="body"
+			@change="imagePreviewIndex = $event"
+		/>
 
 		<div v-if="selectedOrders.length" class="fixed bottom-0 left-0 right-0 z-20 border-t border-#e7edf7 bg-white px-12 py-10">
 			<van-button block round type="primary" size="large" @click="openPreview"> 打印查看 </van-button>
@@ -138,6 +178,7 @@ type AddressItem = {
 	statusType: 'warning' | 'success';
 	reportTime: string;
 	editable: boolean;
+	processed: boolean;
 };
 
 const uploadHost = 'http://gas.coschat.com/';
@@ -154,6 +195,10 @@ const selectedIds = ref<number[]>([]);
 const previewVisible = ref(false);
 const editVisible = ref(false);
 const editSaving = ref(false);
+const editReadonly = ref(false);
+const editImageList = ref<string[]>([]);
+const imagePreviewVisible = ref(false);
+const imagePreviewIndex = ref(0);
 const editForm = reactive({
 	workOrderId: 0,
 	title: '',
@@ -187,6 +232,7 @@ const toAddressItem = (item: PatrolWorkOrder, processed = false): AddressItem =>
 	statusType: processed ? 'success' : 'warning',
 	reportTime: item.reportTime || '',
 	editable: !processed && (item.status === 'pending_report' || item.statusName === '待处理'),
+	processed,
 });
 
 const selectedWorkOrderTexts = computed(() => {
@@ -221,21 +267,53 @@ const addressList = computed<AddressItem[]>(() => pendingWorkOrders.value.map((i
 
 const disabledAddressList = computed<AddressItem[]>(() => processedWorkOrders.value.map((item) => toAddressItem(item, true)));
 
-const openEditWorkOrder = (workOrderId: number) => {
+const normalizeImageSrc = (value?: string) => {
+	const imageSrc = value?.trim();
+	if (!imageSrc) return '';
+	if (/^(data:|https?:\/\/|\/)/i.test(imageSrc)) return imageSrc;
+	return `data:image/jpeg;base64,${imageSrc}`;
+};
+
+const getWorkOrderImages = (order?: PatrolWorkOrder) => {
+	if (!order) return [];
+	const candidates = [
+		order.imageBase64,
+		order.imageUrl,
+		order.base64,
+		...(order.evidenceList || []).flatMap((item) => [
+			item?.imageBase64,
+			item?.imageUrl,
+			item?.base64,
+			item?.fileUrl,
+			item?.url,
+		]),
+	];
+	return Array.from(new Set(candidates.map((item) => normalizeImageSrc(String(item || ''))).filter(Boolean)));
+};
+
+const openWorkOrderPanel = (workOrderId: number, readonly = false) => {
 	const order = workOrders.value.find((item) => item.workOrderId === workOrderId);
-	if (!order || isProcessedWorkOrder(order)) return;
+	if (!order) return;
 	editForm.workOrderId = order.workOrderId;
 	editForm.title = order.title || '';
 	editForm.description = order.description || '';
+	editReadonly.value = readonly || isProcessedWorkOrder(order);
+	editImageList.value = getWorkOrderImages(order);
 	editVisible.value = true;
 };
 
 const handleAddressEdit = (item: AddressItem) => {
-	if (!item.editable) return;
-	openEditWorkOrder(item.id);
+	openWorkOrderPanel(item.id, item.processed || !item.editable);
+};
+
+const previewWorkOrderImage = (index = 0) => {
+	if (!editImageList.value.length) return;
+	imagePreviewIndex.value = index;
+	imagePreviewVisible.value = true;
 };
 
 const saveWorkOrderEdit = async () => {
+	if (editReadonly.value) return;
 	const taskId = task.value?.taskId || Number(route.params.taskId);
 	if (!taskId || !editForm.workOrderId) return;
 	editSaving.value = true;
@@ -480,24 +558,38 @@ onUnmounted(() => {
 }
 
 .work-order-address-list :deep(.van-address-item) {
+	position: relative;
 	animation: workOrderSlideIn 0.28s ease both;
 }
 
 .work-order-address-list :deep(.van-address-item__edit) {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 26px;
-	height: 26px;
-	right: 0;
-	border-radius: 999px;
-	background: #eaf3ff;
-	color: #1677ff;
-	font-size: 17px;
+	display: none;
 }
 
 .work-order-address-list :deep(.van-address-item--disabled .van-address-item__edit) {
 	display: none;
+}
+
+.work-order-card-action {
+	position: absolute;
+	top: 50%;
+	right: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border: 0;
+	border-radius: 999px;
+	background: #eaf3ff;
+	color: #1677ff;
+	font-size: 18px;
+	transform: translateY(-50%);
+}
+
+.work-order-card-action.is-view {
+	background: #edf8f1;
+	color: #18a058;
 }
 
 .work-order-address-list :deep(.van-address-item__name) {

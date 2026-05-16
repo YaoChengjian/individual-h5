@@ -31,13 +31,13 @@
 				</div>
 			</section>
 			<section
-				v-if="taskStatusCode === 'running'"
+				v-if="workOrderEntryVisible"
 				class="mt-10 flex items-center justify-between rounded-16 border border-#e5edf8 bg-white px-14 py-13 shadow-[0_10px_26px_rgba(28,75,145,0.08)] active:scale-[0.99]"
 				@click="openWorkOrders"
 			>
 				<div class="min-w-0">
 					<div class="text-15 font-900 leading-21 text-#172033">事件工单</div>
-					<div class="mt-2 truncate text-12 leading-18 text-#8b95a5">查看巡查中推送的工单并打印</div>
+					<div class="mt-2 truncate text-12 leading-18 text-#8b95a5">{{ workOrderEntryDesc }}</div>
 				</div>
 				<div class="ml-12 inline-flex h-30 w-30 shrink-0 items-center justify-center rounded-full bg-#eef5ff text-#1677ff">
 					<van-icon name="arrow" size="16" />
@@ -117,6 +117,8 @@ const statusMap = computed(() => {
 
 const taskStatusCode = computed(() => current.value?.status || current.value?.taskStatus || '');
 const actionVisible = computed(() => ['waiting', 'running'].includes(taskStatusCode.value));
+const workOrderEntryVisible = computed(() => ['running', 'finished'].includes(taskStatusCode.value));
+const workOrderEntryDesc = computed(() => (taskStatusCode.value === 'finished' ? '查看已完成巡查工单与打印记录' : '查看巡查中推送的工单并打印'));
 const durationText = computed(() => `${current.value?.durationHours || 0} 小时`);
 
 const tagStyle = (color?: string) => ({

@@ -58,6 +58,9 @@ export type PatrolWorkOrder = {
 	documentContent?: string;
 	noticeNumber?: string;
 	fileUrl?: string;
+	imageBase64?: string;
+	imageUrl?: string;
+	base64?: string;
 	evidenceList?: Array<Record<string, any>>;
 	selected?: boolean;
 };
