@@ -57,7 +57,7 @@
 <script setup lang="ts" name="PatrolDetail">
 import { computed, defineComponent, h, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showConfirmDialog, showFailToast, showSuccessToast } from 'vant';
+import { showConfirmDialog, showSuccessToast, showToast } from 'vant';
 import { finishTask, getTaskDetail, listDictionaryData, startTask, type DictionaryData, type PatrolTask } from '/@/api/patrol';
 
 const InfoRow = defineComponent({
@@ -161,6 +161,9 @@ const loadDetail = async () => {
 	loading.value = true;
 	try {
 		current.value = await getTaskDetail(taskId);
+	} catch (error: any) {
+		showToast({ message: error?.message || '任务详情加载失败', icon: '' });
+		await router.replace('/patrol');
 	} finally {
 		loading.value = false;
 	}
@@ -173,7 +176,7 @@ const handleStart = async () => {
 		current.value = await startTask(current.value.taskId);
 		showSuccessToast('任务已开始');
 	} catch (error: any) {
-		showFailToast(error?.message || '当前还有任务未执行完成，请完成后再开始新的巡查任务');
+		showToast({ message: error?.message || '当前还有任务未执行完成，请完成后再开始新的巡查任务', icon: '' });
 	} finally {
 		actionLoading.value = false;
 	}
